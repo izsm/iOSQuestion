@@ -302,12 +302,70 @@ class_addMethod([self class], sel, (IMP)fooMethod, "v@:");
 还可以使用__block来修饰变量</br>
 在MRC下，__block不会增加其引用计数，避免了循环引用</br>
 在ARC下，__block修饰对象会被强引用，无法避免循环引用，需要手动解除。</br>
+
 <b>循环引用场景：</b>
 * 自循环引用
     - 强持有的属性同时持有该对象
 * 相互循环引用
-    <img src="image/相互引用.webp>
+    ![Demo](images/相互引用.webp)
 * 多循环引用
+    ![Demo](images/循环引用.webp)
+
+<b>1、代理(delegate)循环引用属于相互循环引用</b></br>
+delegate 是iOS中开发中比较常遇到的循环引用，一般在声明delegate的时候都要使用弱引用 weak,或者assign,当然怎么选择使用assign还是weak，MRC的话只能用assign，在ARC的情况下最好使用weak，因为weak修饰的变量在释放后自动指向nil，防止野指针存在</br>
+
+<b>2、NSTimer循环引用属于相互循环使用</b></br>
+在控制器内，创建NSTimer作为其属性，由于定时器创建后也会强引用该控制器对象，那么该对象和定时器就相互循环引用了。</br>
+如何解决呢？</br>
+这里我们可以使用手动断开循环引用：</br>
+如果是不重复定时器，在回调方法里将定时器invalidate并置为nil即可。</br>
+如果是重复定时器，在合适的位置将其invalidate并置为nil即可</br>
+
+<b>3、block循环引用</b></br>
+一个简单的例子：</br>
+```
+@property (copy, nonatomic) dispatch_block_t myBlock;
+@property (copy, nonatomic) NSString *blockString;
+
+- (void)testBlock {
+    self.myBlock = ^() {
+        NSLog(@"%@",self.blockString);
+    };
+}
+```
+由于block会对block中的对象进行持有操作,就相当于持有了其中的对象，而如果此时block中的对象又持有了该block，则会造成循环引用。
+解决方案就是使用__weak修饰self即可
+```
+__weak typeof(self) weakSelf = self;
+
+self.myBlock = ^() {
+    NSLog(@"%@",weakSelf.blockString);
+};
+```
+并不是所有block都会造成循环引用。</br>
+只有被强引用了的block才会产生循环引用</br>
+而比如`dispatch_async(dispatch_get_main_queue(), ^{})`,`[UIView animateWithDuration:1 animations:^{}]`这些系统方法等
+或者block并不是其属性而是临时变量,即栈block
+```
+[self testWithBlock:^{
+    NSLog(@"%@",self);
+}];
+
+- (void)testWithBlock:(dispatch_block_t)block {
+    block();
+}
+```
+还有一种场景，在block执行开始时self对象还未被释放，而执行过程中，self被释放了，由于是用weak修饰的，那么weakSelf也被释放了，此时在block里访问weakSelf时，就可能会发生错误(向nil对象发消息并不会崩溃，但也没任何效果)。</br>
+对于这种场景，应该在block中对 对象使用__strong修饰，使得在block期间对 对象持有，block执行结束后，解除其持有。
+```
+__weak typeof(self) weakSelf = self;
+
+self.myBlock = ^() {
+    __strong __typeof(self) strongSelf = weakSelf;
+    [strongSelf test];
+};
+```
+
 
 
 </details>
