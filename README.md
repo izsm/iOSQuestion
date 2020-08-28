@@ -3,7 +3,7 @@
 
 <details>
 <summary>
-####1、说明并比较关键词：`strong`, `weak`, `assign`, `copy`等等
+<b>1、说明并比较关键词：strong, weak, assign, copy等等</b>
 </summary>
 
 `strong`表示指向并拥有该对象。其修饰的对象引用计数会增加1。该对象只要引用计数不为0则不会被销毁。当然强行将其设为nil可以销毁它。
