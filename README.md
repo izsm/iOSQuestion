@@ -3,7 +3,7 @@
 
 <details>
 <summary>
-    <b>1、说明并比较关键词：strong, weak, assign, copy等等</b>
+    <h2>1、说明并比较关键词：strong, weak, assign, copy等等</h2>
 </summary>
 
 `strong`表示指向并拥有该对象。其修饰的对象引用计数会增加1。该对象只要引用计数不为0则不会被销毁。当然强行将其设为nil可以销毁它。
@@ -61,7 +61,7 @@
 
 <details>
 <summary>
-<b>2、atomatic和nonatomic区别和理解</b>
+<h2>2、atomatic和nonatomic区别和理解</h2>
 </summary>
 
 <br/><b>第一种</b><br/>
@@ -116,12 +116,192 @@
 
 <details>
 <summary>
-<b>3、请说明并比较以下关键词：__weak，__block</b>
+<h2>3、请说明并比较以下关键词：__weak，__block</h2>
 </summary>
 
 `__weak`与`weak`基本相同。前者用于修饰变量（variable），后者用于修饰属性（property）。`__weak` 主要用于防止`block`中的循环引用。
 `__block`也用于修饰变量。它是引用修饰，所以其修饰的值是动态变化的，即可以被重新赋值的。`__block`用于修饰某些`block`内部将要修改的外部变量。
 _`_weak`和`__block`的使用场景几乎与`block`息息相关。而所谓`block`，就是`Objective-C`对于闭包的实现。闭包就是没有名字的函数，或者理解为指向函数的指针。
+</details>
+
+<details>
+<summary>
+<h2>4、什么情况下会出现循环引用？</h2>
+</summary>
+</details>
+
+<details>
+<summary>
+<h2>5、什么是KVO和KVC?他们的使用场景是什么？</h2>
+</summary>
+</details>
+
+<details>
+<summary>
+<h2>6、Runtime应用</h2>
+</summary>
+
+`Runtim`简直就是做大型框架的利器。它的应用场景非常多，下面就介绍一些常见的应用场景。
+
+>* 关联对象`(Objective-C Associated Objects)`给分类增加属性
+>* 方法魔法`(Method Swizzling)`方法添加和替换和`KVO`
+>* 实现消息转发(热更新)解决Bug(JSPatch)
+>* 实现`NSCoding`的自动归档和自动解档
+>* 实现字典和模型的自动转换`(MJExtension)`
+
+<b>关联对象(Objective-C Associated Objects)给分类增加属性</b>
+
+关联对象`Runtime`提供了下面几个接口：
+
+```
+// 关联对象
+void objc_setAssociatedObject(id object, const void *key, id value, objc_AssociationPolicy policy)
+// 获取关联的对象
+id objc_getAssociatedObject(id object, const void *key)
+// 移除关联的对象
+void objc_removeAssociatedObjects(id object)
+```
+
+参数解释:
+
+`id object`：被关联的对象</br>
+`const void *key`：关联的key，要求唯一</br>
+`id value`：关联的对象</br>
+`objc_AssociationPolicy policy`：内存管理的策略内存管理的策略</br>
+
+```
+typedef OBJC_ENUM(uintptr_t, objc_AssociationPolicy) {
+    OBJC_ASSOCIATION_ASSIGN = 0,
+    OBJC_ASSOCIATION_RETAIN_NONATOMIC = 1,
+    OBJC_ASSOCIATION_COPY_NONATOMIC = 3, 
+    OBJC_ASSOCIATION_RETAIN = 01401,
+    OBJC_ASSOCIATION_COPY = 01403
+};
+```
+
+`OBJC_ASSOCIATION_ASSIGN`: 指定一个关联对象的弱引用。属性修饰`@property (assign)` 或 `@property (unsafe_unretained)`</br>
+`OBJC_ASSOCIATION_RETAIN_NONATOMIC`: 指定一个关联对象的强引用，不能被原子化使用。属性修饰`@property (nonatomic, strong)`</br>
+`OBJC_ASSOCIATION_COPY_NONATOMIC`: 指定一个关联对象的`copy`引用，不能被原子化使用。属性修饰`@property (nonatomic, copy)`</br>
+`OBJC_ASSOCIATION_RETAIN`:  指定一个关联对象的强引用，能被原子化使用。属性修饰 `@property (atomic, strong)`</br>
+`OBJC_ASSOCIATION_COPY`:  指定一个关联对象的`copy`引用，能被原子化使用。属性修饰`@property (atomic, copy)`</br>
+
+下面实现一个`UIView`的`Category`添加自定义属性`defaultColor`
+
+```
+#import "ViewController.h"
+#import "objc/runtime.h"
+
+@interface UIView (DefaultColor)
+
+@property (nonatomic, strong) UIColor *defaultColor;
+
+@end
+
+@implementation UIView (DefaultColor)
+
+@dynamic defaultColor;
+
+static char kDefaultColorKey;
+
+- (void)setDefaultColor:(UIColor *)defaultColor {
+    objc_setAssociatedObject(self, &kDefaultColorKey, defaultColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (id)defaultColor {
+    return objc_getAssociatedObject(self, &kDefaultColorKey);
+}
+
+@end
+
+@interface ViewController ()
+
+@end
+
+@implementation ViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    UIView *test = [UIView new];
+    test.defaultColor = [UIColor blackColor];
+    NSLog(@"%@", test.defaultColor);
+}
+
+@end
+```
+
+<b> 方法魔法(Method Swizzling)方法添加和替换和KVO实现</b>
+<b>方法添加</b>
+```
+//class_addMethod(Class  _Nullable __unsafe_unretained cls, SEL  _Nonnull name, IMP  _Nonnull imp, const char * _Nullable types)
+class_addMethod([self class], sel, (IMP)fooMethod, "v@:");
+```
+>1、cls 被添加方法的类</br>
+2、name 添加的方法的名称的SEL</br>
+3、imp 方法的实现。该函数必须至少要有两个参数，self,_cmd</br>
+4、types 类型编码
+
+<b>方法替换</b>
+```
+@implementation ViewController
+
++ (void)load {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class class = [self class];
+        SEL originalSelector = @selector(test1);
+        SEL swizzledSelector = @selector(test2);
+        
+        Method originalMethod = class_getInstanceMethod(class, originalSelector);
+        Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
+        
+        BOOL didAddMethod = class_addMethod(class, originalSelector, method_getImplementation(swizzledMethod), method_getTypeEncoding(swizzledMethod));
+        if (didAddMethod) {
+            class_replaceMethod(class, swizzledSelector, method_getImplementation(originalMethod), method_getTypeEncoding(originalMethod));
+        } else {
+            method_exchangeImplementations(originalMethod, swizzledMethod);
+        }
+    });
+}
+
+- (void)test1 {
+    NSLog(@"1");
+}
+
+- (void)test2 {
+    NSLog(@"2");
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    [self test1];
+}
+```
+>在`viewDidLoad`中调用`test1`方法，查找到的对应的方法实现就是`test2`,而不是`test1`
+
+`swizzling`应该只在`+load`中完成。 在 `Objective-C `的运行时中，每个类有两个方法都会自动调用。`+load `是在一个类被初始装载时调用，`+initialize` 是在应用第一次调用该类的类方法或实例方法前调用的。两个方法都是可选的，并且只有在方法被实现的情况下才会被调用。
+
+`swizzlin`g应该只在`dispatch_once `中完成,由于`swizzling `改变了全局的状态，所以我们需要确保每个预防措施在运行时都是可用的。原子操作就是这样一个用于确保代码只会被执行一次的预防措施，就算是在不同的线程中也能确保代码只执行一次。Grand Central Dispatch 的 `dispatch_once`满足了所需要的需求，并且应该被当做使用`swizzling `的初始化单例方法的标准。
+
+</details>
+
+<details>
+<summary>
+<b></b>
+</summary>
+</details>
+
+<details>
+<summary>
+<b></b>
+</summary>
+</details>
+
+<details>
+<summary>
+<b></b>
+</summary>
 </details>
 
 <details>
