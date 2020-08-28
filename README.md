@@ -3,7 +3,7 @@
 
 <details>
 <summary>
-    <p><h2>1、说明并比较关键词：strong, weak, assign, copy等等</h2></p>
+    <b>1、说明并比较关键词：strong, weak, assign, copy等等</b>
 </summary>
 
 `strong`表示指向并拥有该对象。其修饰的对象引用计数会增加1。该对象只要引用计数不为0则不会被销毁。当然强行将其设为nil可以销毁它。
@@ -61,7 +61,7 @@
 
 <details>
 <summary>
-<h2>2、atomatic和nonatomic区别和理解</h2>
+<b>2、atomatic和nonatomic区别和理解</b>
 </summary>
 
 <br/><b>第一种</b><br/>
@@ -116,7 +116,7 @@
 
 <details>
 <summary>
-<h2>3、请说明并比较以下关键词：__weak，__block</h2>
+<b>3、请说明并比较以下关键词：__weak，__block</b>
 </summary>
 
 `__weak`与`weak`基本相同。前者用于修饰变量（variable），后者用于修饰属性（property）。`__weak` 主要用于防止`block`中的循环引用。
@@ -126,19 +126,19 @@ _`_weak`和`__block`的使用场景几乎与`block`息息相关。而所谓`bloc
 
 <details>
 <summary>
-<h2>4、什么情况下会出现循环引用？</h2>
+    <b>4、什么情况下会出现循环引用？</b>
 </summary>
 </details>
 
 <details>
 <summary>
-<h2>5、什么是KVO和KVC?他们的使用场景是什么？</h2>
+    <b>5、什么是KVO和KVC?他们的使用场景是什么？</b>
 </summary>
 </details>
 
 <details>
 <summary>
-<h2>6、Runtime应用</h2>
+    <b>6、Runtime应用</b>
 </summary>
 
 `Runtim`简直就是做大型框架的利器。它的应用场景非常多，下面就介绍一些常见的应用场景。
@@ -288,30 +288,30 @@ class_addMethod([self class], sel, (IMP)fooMethod, "v@:");
 
 <details>
 <summary>
-<b></b>
+    <b></b>
 </summary>
 </details>
 
 <details>
 <summary>
-<b></b>
+    <b></b>
 </summary>
 </details>
 
 <details>
 <summary>
-<b></b>
+    <b></b>
 </summary>
 </details>
 
 <details>
 <summary>
-<b></b>
+    <b></b>
 </summary>
 </details>
 
 <details>
 <summary>
-<b></b>
+    <b></b>
 </summary>
 </details>
