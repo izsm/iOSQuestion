@@ -283,13 +283,33 @@ class_addMethod([self class], sel, (IMP)fooMethod, "v@:");
 `swizzling`应该只在`+load`中完成。 在 `Objective-C `的运行时中，每个类有两个方法都会自动调用。`+load `是在一个类被初始装载时调用，`+initialize` 是在应用第一次调用该类的类方法或实例方法前调用的。两个方法都是可选的，并且只有在方法被实现的情况下才会被调用。
 
 `swizzlin`g应该只在`dispatch_once `中完成,由于`swizzling `改变了全局的状态，所以我们需要确保每个预防措施在运行时都是可用的。原子操作就是这样一个用于确保代码只会被执行一次的预防措施，就算是在不同的线程中也能确保代码只执行一次。Grand Central Dispatch 的 `dispatch_once`满足了所需要的需求，并且应该被当做使用`swizzling `的初始化单例方法的标准。
-
 </details>
 
 <details>
 <summary>
-    <b></b>
+    <b>7、循环引用</b>
 </summary>
+
+</br><b>循环引用的实质：多个对象相互之间有强引用，不能释放让系统回收。</b></br>
+<b>如何解决循环引用？</b></br>
+>1、避免产生循环引用，通常是将 `strong` 引用改为 `weak` 引用。
+比如在修饰属性时用`weak`
+在`block`内调用对象方法时，使用其弱引用，这里可以使用两个宏
+```
+#define WS(weakSelf)            __weak __typeof(&*self)weakSelf = self; // 弱引用
+#define ST(strongSelf)          __strong __typeof(&*self)strongSelf = weakSelf; //使用这个要先声明weakSelf
+```
+还可以使用__block来修饰变量</br>
+在MRC下，__block不会增加其引用计数，避免了循环引用</br>
+在ARC下，__block修饰对象会被强引用，无法避免循环引用，需要手动解除。</br>
+<b>循环引用场景：</b>
+* 自循环引用
+    - 强持有的属性同时持有该对象
+* 相互循环引用
+    <img src="image/相互引用.webp>
+* 多循环引用
+
+
 </details>
 
 <details>
