@@ -365,15 +365,258 @@ self.myBlock = ^() {
     [strongSelf test];
 };
 ```
-
-
-
 </details>
 
 <details>
 <summary>
-    <b></b>
+    <b>8、Block原理、Block变量截获、Block的三种形式、__block</b>
 </summary>
+
+</br><b>一、什么是Block？</b></br>
+* Block是将函数及其执行上下文封装起来的对象。
+```
+NSInteger num = 3;
+NSInteger(^block)(NSInteger) = ^NSInteger(NSInteger n){
+    return n * num;
+};
+block(2);
+```
+通过clang -rewrite-objc WYTest.m命令编译该.m文件，发现该block被编译成这个形式:
+```
+NSInteger num = 3;
+
+NSInteger(*block)(NSInteger) = ((NSInteger (*)(NSInteger))&__WYTest__blockTest_block_impl_0((void *)__WYTest__blockTest_block_func_0, &__WYTest__blockTest_block_desc_0_DATA, num));
+
+((NSInteger (*)(__block_impl *, NSInteger))((__block_impl *)block)->FuncPtr)((__block_impl *)block, 2);
+```
+其中WYTest是文件名，blockTest是方法名，这些可以忽略。</br>
+其中__WYTest__blockTest_block_impl_0结构体为
+```
+struct __WYTest__blockTest_block_impl_0 {
+  struct __block_impl impl;
+  struct __WYTest__blockTest_block_desc_0* Desc;
+  NSInteger num;
+  __WYTest__blockTest_block_impl_0(void *fp, struct __WYTest__blockTest_block_desc_0 *desc, NSInteger _num, int flags=0) : num(_num) {
+    impl.isa = &_NSConcreteStackBlock;
+    impl.Flags = flags;
+    impl.FuncPtr = fp;
+    Desc = desc;
+  }
+};
+```
+_block_impl结构体为
+```
+struct __block_impl {
+  void *isa;//isa指针，所以说Block是对象
+  int Flags;
+  int Reserved;
+  void *FuncPtr;//函数指针
+};
+```
+block内部有isa指针，所以说其本质也是OC对象</br>
+block内部则为:
+```
+static NSInteger __WYTest__blockTest_block_func_0(struct __WYTest__blockTest_block_impl_0 *__cself, NSInteger n) {
+    NSInteger num = __cself->num; // bound by copy
+    return n * num;
+}
+```
+所以说 Block是将函数及其执行上下文封装起来的对象</br>
+既然block内部封装了函数，那么它同样也有参数和返回值。</br></br>
+
+<b>二、Block变量截获</b></br></br>
+<b>1、局部变量截获 是值截获。 比如:</b>
+```
+NSInteger num = 3;
+    
+NSInteger(^block)(NSInteger) = ^NSInteger(NSInteger n){
+    return n*num;
+};
+
+num = 1;
+
+NSLog(@"%zd",block(2));
+```
+这里的输出是6而不是2，原因就是对局部变量num的截获是值截获。</br>
+同样，在block里如果修改变量num，也是无效的，甚至编译器会报错。</br>
+```
+NSMutableArray * arr = [NSMutableArray arrayWithObjects:@"1",@"2", nil];
+void(^block)(void) = ^{
+    NSLog(@"%@",arr);//局部变量
+    [arr addObject:@"4"];
+};
+[arr addObject:@"3"];
+arr = nil;
+block();
+```
+打印为1，2，3</br>
+局部对象变量也是一样，截获的是值，而不是指针，在外部将其置为nil，对block没有影响，而该对象调用方法会影响</br>
+
+<b>2、局部静态变量截获 是指针截获。</b>
+```
+tatic  NSInteger num = 3;
+NSInteger(^block)(NSInteger) = ^NSInteger(NSInteger n){
+    return n*num;
+};
+num = 1;
+NSLog(@"%zd",block(2));
+```
+输出为2，意味着num = 1这里的修改num值是有效的，即是指针截获。</br>
+同样，在block里去修改变量m，也是有效的。</br>
+
+<b>3、全局变量，静态全局变量截获：不截获,直接取值。</b></br></br>
+我们同样用clang编译看下结果。</br>
+```
+static NSInteger num3 = 300;
+NSInteger num4 = 3000;
+
+- (void)blockTest {
+    NSInteger num = 30;
+    static NSInteger num2 = 3;
+    __block NSInteger num5 = 30000;
+    void(^block)(void) = ^{
+        NSLog(@"%zd",num);//局部变量
+        NSLog(@"%zd",num2);//静态变量
+        NSLog(@"%zd",num3);//全局变量
+        NSLog(@"%zd",num4);//全局静态变量
+        NSLog(@"%zd",num5);//__block修饰变量
+    };
+    block();
+}
+```
+编译后
+```
+struct __WYTest__blockTest_block_impl_0 {
+  struct __block_impl impl;
+  struct __WYTest__blockTest_block_desc_0* Desc;
+  NSInteger num;//局部变量
+  NSInteger *num2;//静态变量
+  __Block_byref_num5_0 *num5; // by ref//__block修饰变量
+  __WYTest__blockTest_block_impl_0(void *fp, struct __WYTest__blockTest_block_desc_0 *desc, NSInteger _num, NSInteger *_num2, __Block_byref_num5_0 *_num5, int flags=0) : num(_num), num2(_num2), num5(_num5->__forwarding) {
+    impl.isa = &_NSConcreteStackBlock;
+    impl.Flags = flags;
+    impl.FuncPtr = fp;
+    Desc = desc;
+  }
+};
+```
+ impl.isa = &_NSConcreteStackBlock;这里注意到这一句，即说明该block是栈block）
+可以看到局部变量被编译成值形式，而静态变量被编成指针形式，全局变量并未截获。而__block修饰的变量也是以指针形式截获的，并且生成了一个新的结构体对象：
+```
+struct __Block_byref_num5_0 {
+  void *__isa;
+  __Block_byref_num5_0 *__forwarding;
+ int __flags;
+ int __size;
+ NSInteger num5;
+};
+```
+该对象有个属性：num5，即我们用__block修饰的变量。</br>
+这里__forwarding是指向自身的(栈block)。</br>
+一般情况下，如果我们要对block截获的局部变量进行赋值操作需添加__block</br>
+修饰符，而对全局变量，静态变量是不需要添加__block修饰符的。</br>
+另外，block里访问self或成员变量都会去截获self。</br>
+
+<b>三、Block的几种形式</b></br>
+分为全局Block(_NSConcreteGlobalBlock)、栈Block(_NSConcreteStackBlock)、堆Block(_NSConcreteMallocBlock)三种形式</br>
+其中栈Block存储在栈(stack)区，堆Block存储在堆(heap)区，全局Block存储在已初始化数据(.data)区</br>
+
+<b>1、不使用外部变量的block是全局block</b></br></br>
+比如：
+```
+NSLog(@"%@",[^{
+    NSLog(@"globalBlock");
+} class]);
+```
+输出：
+```
+_NSGlobalBlock__
+```
+<b>2、使用外部变量并且未进行copy操作的block是栈block</b></br></br>
+比如:
+```
+NSInteger num = 10;
+NSLog(@"%@",[^{
+    NSLog(@"stackBlock:%zd",num);
+} class]);
+```
+输出：
+```
+__NSStackBlock__
+```
+日常开发常用于这种情况:
+```
+[self testWithBlock:^{
+    NSLog(@"%@",self);
+}];
+
+- (void)testWithBlock:(dispatch_block_t)block {
+    block();
+    NSLog(@"%@",[block class]);
+}
+```
+<b>3、对栈block进行copy操作，就是堆block，而对全局block进行copy，仍是全局block</b></br>
+* 比如堆1中的全局进行copy操作，即赋值：
+```
+void (^globalBlock)(void) = ^{
+    NSLog(@"globalBlock");
+};
+
+NSLog(@"%@",[globalBlock class]);
+```
+输出：
+```
+_NSGlobalBlock__
+```
+仍是全局block
+
+* 而对2中的栈block进行赋值操作：
+```
+NSInteger num = 10;
+
+void (^mallocBlock)(void) = ^{
+    NSLog(@"stackBlock:%zd",num);
+};
+
+NSLog(@"%@",[mallocBlock class]);
+```
+输出：
+```
+__NSMallocBlock__
+```
+对栈block copy之后，并不代表着栈block就消失了，左边的mallock是堆block，右边被copy的仍是栈block</br></br>
+比如:
+```
+[self testWithBlock:^{
+    NSLog(@"%@",self);
+}];
+
+- (void)testWithBlock:(dispatch_block_t)block {
+    block();
+    dispatch_block_t tempBlock = block;
+    NSLog(@"%@,%@",[block class],[tempBlock class]);
+}
+```
+输出：
+```
+__NSStackBlock__, __NSMallocBlock__
+```
+<b>即如果对栈Block进行copy，将会copy到堆区，对堆Block进行copy，将会增加引用计数，对全局Block进行copy，因为是已经初始化的，所以什么也不做。</b></br></br>
+另外，__block变量在copy时，由于__forwarding的存在，栈上的__forwarding指针会指向堆上的__forwarding变量，而堆上的__forwarding指针指向其自身，所以，如果对__block的修改，实际上是在修改堆上的__block变量。</br></br>
+<b>即__forwarding指针存在的意义就是，无论在任何内存位置， 都可以顺利地访问同一个__block变量。</b></br></br>
+另外由于block捕获的__block修饰的变量会去持有变量，那么如果用__block修饰self，且self持有block，并且block内部使用到__block修饰的self时，就会造成多循环引用，即self持有block，block 持有__block变量，而__block变量持有self，造成内存泄漏。</br></br>
+比如:
+```
+_block typeof(self) weakSelf = self;
+    
+_testBlock = ^{
+    NSLog(@"%@",weakSelf);
+};
+
+_testBlock();
+```
+如果要解决这种循环引用，可以主动断开__block变量对self的持有，即在block内部使用完weakself后，将其置为nil，但这种方式有个问题，如果block一直不被调用，那么循环引用将一直存在。
+所以，我们最好还是用__weak来修饰self
 </details>
 
 <details>
