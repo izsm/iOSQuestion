@@ -521,10 +521,103 @@ KVO-test[1214:513029] person1添加KVO监听之后-元类对象 -NSKVONotifying_
 > 从上述测试代码的结果我们发现，`person` 中的 `isa` 从开始指向`Person`类对象，变成指向了 `NSKVONotifying_Person` 类对象</br>
 
 * KVO会在运行时动态创建一个新类，将对象的isa指向新创建的类，新类是原类的子类，命名规则是NSKVONotifying_xxx的格式。</br>
-> 未使用KVO监听对象是，对象和类对象之间的关系如下
+> 1、未使用KVO监听对象是，对象和类对象之间的关系如下</br>
+![Demo](images/未使用KVO监听对象.webp)
 
+> 2、使用KVO监听对象后，对象和类对象之间会添加一个中间对象</br>
+![Demo](images/使用KVO监听对象.webp)
 
+<h5>NSKVONotifying_Person类内部实现</h5>
 
+> 我们从上面两张图很清楚的看到添加KVO之前和KVO之后的变化，下面我们剖析一下这个中间类NSKVONotifying_Person（这里是*通配符,它代表数据类型，例如：int， longlong）</br>
+```
+- (void)setAge:(int)age{
+    _NSSet*ValueAndNotify();//这个方法调用顺序是什么，它是在调用何处方法，都在setter方法改变中详解
+}
+
+- (Class)class {
+    return [LDPerson class];
+}
+
+- (void)dealloc {
+    // 收尾工作
+}
+
+- (BOOL)_isKVOA {
+    return YES;
+}
+```
+* sa混写之后如何调用方法</br>
+  - 调用监听的属性设置方法，如 `setAge:`，都会先调用 `NSKVONotify_Person` 对应的属性设置方法；</br>
+  - 调用非监听属性设置方法，如 `test`，会通过 `NSKVONotify_Person` 的 `superclass`，找到 `Person` 类对象，再调用其 `[Person test]` 方法</br>
+* 为什么重写class方法</br>
+  - 如果没有重写`class`方法,当该对象调用`class`方法时,会在自己的方法缓存列表,方法列表,父类缓存,方法列表一直向上去查找该方法,因为`class`方法是`NSObject`中的方法,如果不重写最终可能会返回`NSKVONotifying_Person`,就会将该类暴露出来,也给开发者造成困扰,写的是`Person`,添加`KVO`之后`class`方法返回怎么是另一个类。</br>
+* _isKVOA有什么作用。</br>
+  - 这个方法可以当做使用了`KVO`的一个标记，系统可能也是这么用的。如果我们想判断当前类是否是`KVO`动态生成的类，就可以从方法列表中搜索这个方法。</br>
+
+<h4>setter实现不同</h4>
+
+* 在测试代码中，我们已经通过地址查找添加KVO前后调用的方法</br>
+
+```
+//通过地址查找方法
+//添加KVO之前
+(lldb) p (IMP)0x10f24b470
+(IMP) $0 = 0x000000010f24b470 (KVO-test`-[Person setAge:] at Person.h:15)
+//添加KVO之后
+(lldb) p (IMP)0x10f5a6844
+(IMP) $1 = 0x000000010f5a6844 (Foundation`_NSSetLongLongValueAndNotify)
+```
+> `0x10f24b470`这个地址的`setAge:`实现是调用`Person`类的`setAge:`方法，并且是在`Person.h`的第15行。</br>
+> 而`0x10f5a6844`这个地址的`setAge:`实现是调用`_NSSetIntValueAndNotify`这样一个C函数。</br>
+
+<h4>KVO内部调用流程</h4>
+
+* 由于我们无法去窥探`_NSSetIntValueAndNotify`的真实结构，也无法去重写`NSKVONotifying_Person`这个类，所以我们只能利用它的父类`Person`类来分析其执行过程。</br>
+```
+- (void)setAge:(int)age{
+    _age = age;
+    NSLog(@"setAge:");
+}
+
+- (void)willChangeValueForKey:(NSString *)key{
+    [super willChangeValueForKey:key];
+    NSLog(@"willChangeValueForKey");
+}
+
+- (void)didChangeValueForKey:(NSString *)key{
+    NSLog(@"didChangeValueForKey - begin");
+    [super didChangeValueForKey:key];
+    NSLog(@"didChangeValueForKey - end");
+}
+@end
+
+//打印结果
+KVO-test[1457:637227] willChangeValueForKey
+KVO-test[1457:637227] setAge:
+KVO-test[1457:637227] didChangeValueForKey - begin
+KVO-test[1457:637227] didChangeValueForKey - end
+KVO-test[1457:637227] willChangeValueForKey
+KVO-test[1457:637227] didChangeValueForKey - begin
+KVO-test[1457:637227] didChangeValueForKey - end
+```
+* 通过打印结果，我们可以清晰看到
+> 1、首先调用`willChangeValueForKey:`方法。</br>
+> 2、然后调用`setAge:`方法真正的改变属性的值。</br>
+> 3、开始调用`didChangeValueForKey:`这个方法，调用`[super didChangeValueForKey:key]`时会通知监听者属性值已经改变，然后监听者执行自己的`- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context`这个方法。</br>
+
+* 下面我用一张图来展示KVO执行流程</br>
+![Demo](images/KVO执行流程.webp)
+
+<h4>KVO扩展</h4>
+
+* KVC 与 KVO 的不同？</br>
+> 1. `KVC`(键值编码)，即 `Key-Value Coding`，一个非正式的` Protocol`，使用字符串(键)访问一个对象实例变量的机制。而不是通过调用 `Setter`、`Getter` 方法等显式的存取方式去访问。</br>
+> 2. `KVO`(键值监听)，即 `Key-Value Observing`，它提供一种机制,当指定的对象的属性被修改后,对象就会接受到通知，前提是执行了 `setter` 方法、或者使用了`KVC` 赋值。</br>
+
+* 和 notification(通知)的区别？</br>
+> 1. `KVO` 和 `NSNotificationCenter` 都是 `iOS` 中观察者模式的一种实现。区别在于，相对于被观察者和观察者之间的关系，`KVO` 是一对一的，而不是一对多的。`KVO` 对被监听对象无侵入性，不需要修改其内部代码即可实现监听。</br>
+> 2. `notification` 的优点是监听不局限于属性的变化，还可以对多种多样的状态变化进行监听，监听范围广，例如键盘、前后台等系统通知的使用也更显灵活方便。
 
 </details>
 
