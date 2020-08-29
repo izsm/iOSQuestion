@@ -1,6 +1,9 @@
 
 ## 基础
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               1、说明并比较关键词：strong, weak, assign, copy等等
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
     <b>1、说明并比较关键词：strong, weak, assign, copy等等</b>
@@ -60,6 +63,9 @@
 使用`weak`的时候需要特别注意的是：先将控件添加到`superview`上之后再赋值给`self`，避免控件被过早释放。
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                2、atomatic和nonatomic区别和理解
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
 <b>2、atomatic和nonatomic区别和理解</b>
@@ -115,6 +121,9 @@
 
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               3、请说明并比较以下关键词：__weak，__block
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
 <b>3、请说明并比较以下关键词：__weak，__block</b>
@@ -127,15 +136,404 @@
 _`_weak`和`__block`的使用场景几乎与`block`息息相关。而所谓`block`，就是`Objective-C`对于闭包的实现。闭包就是没有名字的函数，或者理解为指向函数的指针。
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               4、什么是KVC?使用场景是什么？
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
-    <b>4、什么是KVO和KVC?他们的使用场景是什么？</b>
+    <b>4、什么是KVC?使用场景是什么？</b>
 </summary>
+    
+</br>
+
+* <b> KVC 常用的方法</b>
+```
+(1)赋值类方法
+- (void)setValue:(nullable id)value forKey:(NSString *)key;
+- (void)setValue:(nullable id)value forKeyPath:(NSString *)keyPath;
+- (void)setValue:(nullable id)value forUndefinedKey:(NSString *)key;
+- (void)setValuesForKeysWithDictionary:(NSDictionary<NSString *, id> *)keyedValues;
+
+(2)取值类方法
+// 能取得私有成员变量的值
+- (id)valueForKey:(NSString *)key;
+- (id)valueForKeyPath:(NSString *)keyPath;
+- (NSDictionary *)dictionaryWithValuesForKeys:(NSArray *)keys;
+```
+
+* <b>KVC 底层实现原理</b></br>
+> 当一个对象调用setValue:forKey: 方法时,方法内部会做以下操作:</br>
+> 1.判断有没有指定key的set方法,如果有set方法,就会调用set方法,给该属性赋值</br>
+> 2.如果没有set方法,判断有没有跟key值相同且带有下划线的成员属性(_key).如果有,直接给该成员属性进行赋值</br>
+> 3.如果没有成员属性_key,判断有没有跟key相同名称的属性.如果有,直接给该属性进行赋值</br>
+> 4.如果都没有,就会调用 valueforUndefinedKey 和setValue:forUndefinedKey:方法</br>
+
+<b>* KVC 的使用场景</b></br>
+<b>1、赋值</b></br>
+> (1) KVC 简单属性赋值
+```
+Person *p = [[Person alloc] init];
+//    p.name = @"jack";
+//    p.money = 22.2;
+使用setValue: forKey:方法能够给属性赋值,等价于直接给属性赋值
+[p setValue:@"rose" forKey:@"name"];
+[p setValue:@"22.2" forKey:@"money"];
+```
+> (2) KVC复杂属性赋值
+```
+//给Person添加 Dog属性
+Person *p = [[Person alloc] init];
+p.dog = [[Dog alloc] init];
+// p.dog.name = @"阿黄";
+
+1)setValue: forKeyPath: 方法的使用
+//修改p.dog 的name 属性
+[p.dog setValue:@"wangcai" forKeyPath:@"name"];
+[p setValue:@"阿花" forKeyPath:@"dog.name"];
+
+2)setValue: forKey: 错误用法
+[p setValue:@"阿花" forKey:@"dog.name"];
+NSLog(@"%@", p.dog.name);
+
+3)直接修改私有成员变量
+[p setValue:@"旺财" forKeyPath:@"_name"];
+```
+> (3) 添加私有成员变量
+```
+Person 类中添加私有成员变量_age
+[p setValue:@"22" forKeyPath:@"_age"];
+```
+
+<b>2、字典转模型</b></br>
+```
+1)简单的字典转模型
+ +(instancetype)videoWithDict:(NSDictionary *)dict {
+    JLVideo *videItem = [[JLVideo alloc] init];
+    //以前
+//    videItem.name = dict[@"name"];
+//    videItem.money = [dict[@"money"] doubleValue] ;
+    
+    //KVC,使用setValuesForKeysWithDictionary:方法,该方法默认根据字典中每个键值对,调用setValue:forKey方法
+    // 缺点:字典中的键值对必须与模型中的键值对完全对应,否则程序会崩溃
+    [videItem setValuesForKeysWithDictionary:dict];
+    return videItem;
+}
+
+(2)复杂的字典转模型
+注意:复杂字典转模型不能直接通过KVC 赋值,KVC只能在简单字典中使用,比如:
+    NSDictionary *dict = @{
+                       @"name" : @"jack",
+                       @"money": @"22.2",
+                       @"dog" : @{
+                               @"name" : @"wangcai",
+                               @"money": @"11.1"}
+                       };
+   JLPerson *p = [[JLPerson alloc]init]; // p是一个模型对象
+   [p setValuesForKeysWithDictionary:dict];
+内部转换原理:
+//    [p setValue:@"jack" forKey:@"name"];
+//    [p setValue:@"22.2" forKey:@"money"];
+//    [p setValue:@{
+//                  @"name" : @"wangcai",
+//                  @"money": @"11.1",
+//
+//                  } forKey:@"dog"]; //给 dog赋值一个字典肯定是不对的
+
+(3)KVC解析复杂字典的正确步骤
+   NSDictionary *dict = @{
+                       @"name" : @"jack",
+                       @"money": @"22.2",
+                       @"dog" : @{
+                               @"name" : @"wangcai",
+                               @"price": @"11.1",
+                               },
+                       //人有好多书
+                       @"books" : @[
+                               @{
+                                   @"name" : @"5分钟突破iOS开发",
+                                   @"price" : @"19.8"
+                                   },
+                               @{
+                                   @"name" : @"3分钟突破iOS开发",
+                                   @"price" : @"24.8"
+                                   },
+                               @{
+                                   @"name" : @"1分钟突破iOS开发",
+                                   @"price" : @"29.8"
+                                   }
+                               ]
+                       };
+
+    XMGPerson *p = [[XMGPerson alloc] init];
+     p.dog = [[XMGDog alloc] init];
+    [p.dog setValuesForKeysWithDictionary:dict[@"dog"]];
+    
+    //保存模型的可变数组
+    NSMutableArray *arrayM = [NSMutableArray array];
+    
+    for (NSDictionary *dict in dict[@"books"]) {
+        //创建模型
+        Book *book = [[Book alloc] init];
+        //KVC
+        [book setValuesForKeysWithDictionary:dict];
+        //将模型保存
+        [arrayM addObject:book];
+    }
+    p.books = arrayM;
+
+备注:
+    (1)当字典中的键值对很复杂,不适合用KVC;
+    (2)服务器返还的数据,你可能不会全用上,如果在模型一个一个写属性非常麻烦,所以不建议使用KVC字典转模型
+```
+
+<b>3、取值</b></br>
+> (1) 模型转字典
+```
+ Person *p = [[Person alloc]init];
+ p.name = @"jack";
+ p.money = 11.1;
+ //KVC取值
+ NSLog(@"%@ %@", [p valueForKey:@"name"], [p valueForKey:@"money"]);
+
+ //模型转字典, 根据数组中的键获取到值,然后放到字典中
+ NSDictionary *dict = [p dictionaryWithValuesForKeys:@[@"name", @"money"]];
+ NSLog(@"%@", dict);
+```
+> (2) 访问数组中元素的属性值
+```
+Book *book1 = [[Book alloc] init];
+book1.name = @"5分钟突破iOS开发";
+book1.price = 10.7;
+
+Book *book2 = [[Book alloc] init];
+book2.name = @"4分钟突破iOS开发";
+book2.price = 109.7;
+
+Book *book3 = [[Book alloc] init];
+book3.name = @"1分钟突破iOS开发";
+book3.price = 1580.7;
+
+// 如果valueForKeyPath:方法的调用者是数组，那么就是去访问数组元素的属性值
+// 取得books数组中所有Book对象的name属性值，放在一个新的数组中返回
+    NSArray *books = @[book1, book2, book3];
+    NSArray *names = [books valueForKeyPath:@"name"];
+    NSLog(@"%@", names);
+
+//访问属性数组中元素的属性值
+Person *p = [[Person alloc]init];
+p.books = @[book1, book2, book3];
+NSArray *names = [p valueForKeyPath:@"books.name"];
+NSLog(@"%@", names);
+
+```
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               5、什么是KVO? 使用场景是什么？
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
-    <b>5、Runtime应用</b>
+    <b>5、什么是KVO? 使用场景是什么？</b>
+</summary>
+
+<h4>什么是KVO？</h4>
+
+> `KVO`全称`Key Value Observing`，是苹果提供的一套事件通知机制。允许对象监听另一个对象特定属性的改变，并在改变时接收到事件。由于 `KVO` 的实现机制，只针对属性才会发生作用，一般继承自 `NSObjec`t 的对象都默认支持 `KVO`。</br>
+> 
+> `KVO`可以监听单个属性的变化，也可以监听集合对象的变化。通过`KVC`的`mutableArrayValueForKey:`等方法获得代理对象，当代理对象的内部对象发生改变时，会回调 `KVO` 监听的方法。集合对象包含 `NSArray` 和 `NSSet`。</br>
+
+<h4>KVO基本使用</h4>
+
+使用KVO大致分为三个步骤：</br>
+
+> 1、通过`addObserver:forKeyPath:options:context:`方法注册观察者，观察者可以接收`keyPath`属性的变化事件</br>
+> 2、在观察者中实现`observeValueForKeyPath:ofObject:change:context:`方法，当`keyPath`属性发生改变后，`KVO`会回调这个方法来通知观察者</br>
+> 3、当观察者不需要监听时，可以调用`removeObserver:forKeyPath:`方法将`KVO`移除。需要注意的是，调用`removeObserver`需要在观察者消失之前，否则会导致`Crash`</br>
+
+<h4>注册观察者</h4>
+
+```
+/*
+@observer:就是观察者，是谁想要观测对象的值的改变。
+@keyPath:就是想要观察的对象属性。
+@options:options一般选择NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld，这样当属性值发生改变时我们可以同时获得旧值和新值，如果我们只填NSKeyValueObservingOptionNew则属性发生改变时只会获得新值。
+@context:想要携带的其他信息，比如一个字符串或者字典什么的。
+*/
+- (void)addObserver:(NSObject *)observer forKeyPath:(NSString *)keyPath options:(NSKeyValueObservingOptions)options context:(nullable void *)context;
+```
+<h4>监听回调</h4>
+
+```
+/*
+@keyPath:观察的属性
+@object:观察的是哪个对象的属性
+@change:这是一个字典类型的值，通过键值对显示新的属性值和旧的属性值
+@context:上面添加观察者时携带的信息
+*/
+- (void)observeValueForKeyPath:(nullable NSString *)keyPath ofObject:(nullable id)object change:(nullable NSDictionary<NSKeyValueChangeKey, id> *)change context:(nullable void *)context;
+```
+<h4>调用方式</h4>
+<h5>自动调用</h5>
+
+> 调用KVO属性对象时，不仅可以通过点语法和set语法进行调用，还可以使用KVC方法
+```
+//通过属性的点语法间接调用
+objc.name = @"";
+
+// 直接调用set方法
+[objc setName:@"Savings"];
+
+// 使用KVC的setValue:forKey:方法
+[objc setValue:@"Savings" forKey:@"name"];
+
+// 使用KVC的setValue:forKeyPath:方法
+[objc setValue:@"Savings" forKeyPath:@"account.name"];
+```
+<h5>手动调用</h5>
+
+* KVO 在属性发生改变时的调用是自动的，如果想要手动控制这个调用时机，或想自己实现 KVO 属性的调用，则可以通过 KVO 提供的方法进行调用。</br>
+> 1、第一步我们需要认识下面这个方法，如果想要手动调用或自己实现KVO需要重写该方法该方法返回YES表示可以调用，返回NO则表示不可以调用。
+```
++ (BOOL)automaticallyNotifiesObserversForKey:(NSString *)theKey {
+    BOOL automatic = NO;
+    if ([theKey isEqualToString:@"name"]) {
+        automatic = NO;//对该key禁用系统自动通知，若要直接禁用该类的KVO则直接返回NO；
+    }
+    else {
+        automatic = [super automaticallyNotifiesObserversForKey:theKey];
+    }
+    return automatic;
+}
+```
+> 2、第二步我们需要重写setter方法
+```
+- (void)setName:(NSString *)name {
+    if (name != _name) {
+        [self willChangeValueForKey:@"name"];
+        _name = name;
+        [self didChangeValueForKey:@"name"];
+    }
+}
+```
+<h4>移除观察者</h4>
+
+```
+//需要在不使用的时候,移除监听
+- (void)dealloc{
+    [self removeObserver:self forKeyPath:@"age"];
+}
+```
+
+<h4>Crash</h4>
+<h5>观察者未实现监听方法</h5>
+
+* 若观察者对象 -observeValueForKeyPath:ofObject:change:context: 未实现，将会 Crash
+```
+Crash：Terminating app due to uncaught exception ‘NSInternalInconsistencyException’, reason: ‘<ViewController: 0x7f9943d06710>: An -observeValueForKeyPath:ofObject:change:context: message was received but not handled
+```
+
+<h5>未及时移除观察者</h5>
+
+```
+Crash： Thread 1: EXC_BAD_ACCESS (code=1, address=0x105e0fee02c0)
+```
+```
+//观察者ObserverPersonChage
+@interface ObserverPersonChage : NSObject
+  //实现observeValueForKeyPath: ofObject: change: context:
+@end
+
+//ViewController
+- (void)addObserver
+{
+    self.observerPersonChange = [[ObserverPersonChage alloc] init];
+    [self.person1 addObserver:self.observerPersonChange forKeyPath:@"age" options:option context:@"age chage"];
+    [self.person1 addObserver:self.observerPersonChange forKeyPath:@"name" options:option context:@"name change"];
+}
+
+//点击按钮将观察者置为nil，即销毁
+- (IBAction)clearObserverPersonChange:(id)sender {
+    self.observerPersonChange = nil;
+}
+
+//点击改变person1属性值
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
+{
+    self.person1.age = 29;
+    self.person1.name = @"hengcong";
+}
+```
+> 1、假如在当前 ViewController 中，注册了观察者，点击屏幕，改变被观察对象 person1 的属性值。</br>
+> 2、点击对应按钮，销毁观察者，此时 self.observerPersonChange 为 nil。</br>
+> 3、再次点击屏幕，此时 Crash；</br>
+
+<h5>多次移除观察者</h5>
+
+```
+Cannot remove an observer for the key path “age” from because it is not registered as an observer.
+```
+
+<h4>实际应用</h4>
+
+> KVO主要用来做键值观察操作，想要一个值发生改变后通知另一个对象，则用KVO实现最为合适。斯坦福大学的iOS教程中有一个很经典的案例，通过KVO在Model和Controller之间进行通信。
+
+<h4>KVO实现原理</h4>
+
+> `KVO`是通过`isa` 混写`(isa-swizzling)`技术实现的。在运行时根据原类创建一个中间类，这个中间类是原类的子类，并动态修改当前对象的`isa`指向中间类。并且将`class`方法重写，返回原类的`Class`。所以苹果建议在开发中不应该依赖`isa`指针，而是通过`class`实例方法来获取对象类型。
+
+<h4>测试代码</h4>
+
+```
+NSKeyValueObservingOptions option = NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew;
+
+NSLog(@"person1添加KVO监听对象之前-类对象 -%@", object_getClass(self.person1));
+NSLog(@"person1添加KVO监听之前-方法实现 -%p", [self.person1 methodForSelector:@selector(setAge:)]);
+NSLog(@"person1添加KVO监听之前-元类对象 -%@", object_getClass(object_getClass(self.person1)));
+
+[self.person1 addObserver:self forKeyPath:@"age" options:option context:@"age chage"];
+
+NSLog(@"person1添加KVO监听对象之后-类对象 -%@", object_getClass(self.person1));
+NSLog(@"person1添加KVO监听之后-方法实现 -%p", [self.person1 methodForSelector:@selector(setAge:)]);
+NSLog(@"person1添加KVO监听之后-元类对象 -%@", object_getClass(object_getClass(self.person1)));
+
+//打印结果
+KVO-test[1214:513029] person1添加KVO监听对象之前-类对象 -Person
+KVO-test[1214:513029] person1添加KVO监听之前-方法实现 -0x100411470
+KVO-test[1214:513029] person1添加KVO监听之前-元类对象 -Person
+
+KVO-test[1214:513029] person1添加KVO监听对象之后-类对象 -NSKVONotifying_Person
+KVO-test[1214:513029] person1添加KVO监听之后-方法实现 -0x10076c844
+KVO-test[1214:513029] person1添加KVO监听之后-元类对象 -NSKVONotifying_Person
+
+//通过地址查找方法
+(lldb) p (IMP)0x10f24b470
+(IMP) $0 = 0x000000010f24b470 (KVO-test`-[Person setAge:] at Person.h:15)
+(lldb) p (IMP)0x10f5a6844
+(IMP) $1 = 0x000000010f5a6844 (Foundation`_NSSetLongLongValueAndNotify)
+```
+* 通过测试代码，我们添加KVO前后发生以下变化</br>
+> 1、`person`指向的类对象和元类对象，以及 `setAge:` 均发生了变化；</br>
+> 2、添加`KVO`后，`person` 中的 `isa` 指向了 `NSKVONotifying_Person` 类对象；</br>
+> 3、添加 `KVO` 之后，`setAge:` 的实现调用的是：`Foundation`中 `_NSSetLongLongValueAndNotify` 方法；</br>
+
+<h5>发现中间对象</h5>
+
+> 从上述测试代码的结果我们发现，`person` 中的 `isa` 从开始指向`Person`类对象，变成指向了 `NSKVONotifying_Person` 类对象</br>
+
+* KVO会在运行时动态创建一个新类，将对象的isa指向新创建的类，新类是原类的子类，命名规则是NSKVONotifying_xxx的格式。</br>
+> 未使用KVO监听对象是，对象和类对象之间的关系如下
+
+
+
+
+</details>
+
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               6、Runtime应用 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
+<details>
+<summary>
+    <b>6、Runtime应用</b>
 </summary>
 
 </br>
@@ -283,9 +681,12 @@ class_addMethod([self class], sel, (IMP)fooMethod, "v@:");
 `swizzlin`g应该只在`dispatch_once `中完成,由于`swizzling `改变了全局的状态，所以我们需要确保每个预防措施在运行时都是可用的。原子操作就是这样一个用于确保代码只会被执行一次的预防措施，就算是在不同的线程中也能确保代码只执行一次。Grand Central Dispatch 的 `dispatch_once`满足了所需要的需求，并且应该被当做使用`swizzling `的初始化单例方法的标准。
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               7、循环引用
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
-    <b>6、循环引用</b>
+    <b>7、循环引用</b>
 </summary>
 
 </br><b>循环引用的实质：多个对象相互之间有强引用，不能释放让系统回收。</b></br>
@@ -365,9 +766,12 @@ self.myBlock = ^() {
 ```
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               8、Block原理、Block变量截获、Block的三种形式、__block
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
-    <b>7、Block原理、Block变量截获、Block的三种形式、__block</b>
+    <b>8、Block原理、Block变量截获、Block的三种形式、__block</b>
 </summary>
 
 </br><b>一、什么是Block？</b></br>
@@ -617,9 +1021,12 @@ _testBlock();
 所以，我们最好还是用__weak来修饰self
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               9、类（class）和结构体（struct）有什么区别？
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
-    <b>8、类（class）和结构体（struct）有什么区别？</b>
+    <b>9、类（class）和结构体（struct）有什么区别？</b>
 </summary>
     
 </br>
@@ -664,12 +1071,18 @@ struct也有这样几个优势：</br>
 无须担心内存memory leak或者多线程冲突问题</br>
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               10、
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
     <b></b>
 </summary>
 </details>
 
+<!--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               11、
+--------------------------------------------------------------------------------------------------------------------------------------------------------------->
 <details>
 <summary>
     <b></b>
