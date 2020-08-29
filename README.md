@@ -557,7 +557,7 @@ person添加KVO监听之后-元类对象 -NSKVONotifying_Person
     return YES;
 }
 ```
-* sa混写之后如何调用方法</br>
+* isa混写之后如何调用方法</br>
   - 调用监听的属性设置方法，如 `setAge:`，都会先调用 `NSKVONotify_Person` 对应的属性设置方法；</br>
   - 调用非监听属性设置方法，如 `test`，会通过 `NSKVONotify_Person` 的 `superclass`，找到 `Person` 类对象，再调用其 `[Person test]` 方法</br>
 * 为什么重写class方法</br>
