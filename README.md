@@ -128,19 +128,13 @@ _`_weak`和`__block`的使用场景几乎与`block`息息相关。而所谓`bloc
 
 <details>
 <summary>
-    <b>4、什么情况下会出现循环引用？</b>
+    <b>4、什么是KVO和KVC?他们的使用场景是什么？</b>
 </summary>
 </details>
 
 <details>
 <summary>
-    <b>5、什么是KVO和KVC?他们的使用场景是什么？</b>
-</summary>
-</details>
-
-<details>
-<summary>
-    <b>6、Runtime应用</b>
+    <b>5、Runtime应用</b>
 </summary>
 
 </br>
@@ -290,7 +284,7 @@ class_addMethod([self class], sel, (IMP)fooMethod, "v@:");
 
 <details>
 <summary>
-    <b>7、循环引用</b>
+    <b>6、循环引用</b>
 </summary>
 
 </br><b>循环引用的实质：多个对象相互之间有强引用，不能释放让系统回收。</b></br>
@@ -372,7 +366,7 @@ self.myBlock = ^() {
 
 <details>
 <summary>
-    <b>8、Block原理、Block变量截获、Block的三种形式、__block</b>
+    <b>7、Block原理、Block变量截获、Block的三种形式、__block</b>
 </summary>
 
 </br><b>一、什么是Block？</b></br>
