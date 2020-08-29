@@ -419,8 +419,9 @@ objc.name = @"";
 
 ```
 //需要在不使用的时候,移除监听
-- (void)dealloc{
-    [self removeObserver:self forKeyPath:@"age"];
+- (void)dealloc {
+    [self.person removeObserver:self.observerPerson forKeyPath:@"age"];
+    [self.person removeObserver:self.observerPerson forKeyPath:@"name"];
 }
 ```
 
@@ -429,43 +430,52 @@ objc.name = @"";
 
 * 若观察者对象 -observeValueForKeyPath:ofObject:change:context: 未实现，将会 Crash
 ```
-Crash：Terminating app due to uncaught exception ‘NSInternalInconsistencyException’, reason: ‘<ViewController: 0x7f9943d06710>: An -observeValueForKeyPath:ofObject:change:context: message was received but not handled
+'<KVOViewController: 0x7f90f1402a60>: An -observeValueForKeyPath:ofObject:change:context: message was received but not handled.
 ```
 
 <h5>未及时移除观察者</h5>
 
 ```
-Crash： Thread 1: EXC_BAD_ACCESS (code=1, address=0x105e0fee02c0)
+Crash： Thread 1: EXC_BAD_ACCESS (code=1, address=0x8)
 ```
 ```
 //观察者ObserverPersonChage
-@interface ObserverPersonChage : NSObject
-  //实现observeValueForKeyPath: ofObject: change: context:
+@interface ObserverPersonChange : NSObject
 @end
 
-//ViewController
-- (void)addObserver
-{
-    self.observerPersonChange = [[ObserverPersonChage alloc] init];
-    [self.person1 addObserver:self.observerPersonChange forKeyPath:@"age" options:option context:@"age chage"];
-    [self.person1 addObserver:self.observerPersonChange forKeyPath:@"name" options:option context:@"name change"];
+@implementation ObserverPersonChange
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context {
+    NSLog(@"%@", keyPath);
+    if ([keyPath isEqualToString:@"age"]) {
+        NSLog(@"age %@", object);
+    }
+    if ([keyPath isEqualToString:@"name"]) {
+        NSLog(@"name %@", object);
+    }
 }
 
-//点击按钮将观察者置为nil，即销毁
-- (IBAction)clearObserverPersonChange:(id)sender {
-    self.observerPersonChange = nil;
+@end
+
+// KVOViewController
+- (void)btn1Click {
+    [self.person addObserver:self.observerPerson forKeyPath:@"age" options:(NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew) context:@"age change"];
+    [self.person addObserver:self.observerPerson forKeyPath:@"name" options:(NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew) context:@"name change"];
 }
 
-//点击改变person1属性值
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
-{
-    self.person1.age = 29;
-    self.person1.name = @"hengcong";
+- (void)btn2Click {
+    self.observerPerson = nil;
+}
+
+//点击改变person属性值
+- (void)btn3Click {
+    self.person.age = 10;
+    self.person.name = @"小明";
 }
 ```
-> 1、假如在当前 ViewController 中，注册了观察者，点击屏幕，改变被观察对象 person1 的属性值。</br>
-> 2、点击对应按钮，销毁观察者，此时 self.observerPersonChange 为 nil。</br>
-> 3、再次点击屏幕，此时 Crash；</br>
+> 1、假如在当前 `KVOViewController` 中，注册了观察者，点击屏幕，改变被观察对象 `person` 的属性值。</br>
+> 2、点击对应按钮，销毁观察者，此时 self.observerPerson 为 nil。</br>
+> 3、再次点击btn3按钮，此时 Crash；</br>
 
 <h5>多次移除观察者</h5>
 
@@ -486,28 +496,28 @@ Cannot remove an observer for the key path “age” from because it is not regi
 ```
 NSKeyValueObservingOptions option = NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew;
 
-NSLog(@"person1添加KVO监听对象之前-类对象 -%@", object_getClass(self.person1));
-NSLog(@"person1添加KVO监听之前-方法实现 -%p", [self.person1 methodForSelector:@selector(setAge:)]);
-NSLog(@"person1添加KVO监听之前-元类对象 -%@", object_getClass(object_getClass(self.person1)));
+NSLog(@"person添加KVO监听对象之前-类对象 -%@", object_getClass(self.person));
+NSLog(@"person添加KVO监听之前-方法实现 -%p", [self.person methodForSelector:@selector(setAge:)]);
+NSLog(@"person添加KVO监听之前-元类对象 -%@", object_getClass(object_getClass(self.person)));
 
-[self.person1 addObserver:self forKeyPath:@"age" options:option context:@"age chage"];
+[self.person addObserver:self forKeyPath:@"age" options:option context:@"age chage"];
 
-NSLog(@"person1添加KVO监听对象之后-类对象 -%@", object_getClass(self.person1));
-NSLog(@"person1添加KVO监听之后-方法实现 -%p", [self.person1 methodForSelector:@selector(setAge:)]);
-NSLog(@"person1添加KVO监听之后-元类对象 -%@", object_getClass(object_getClass(self.person1)));
+NSLog(@"person添加KVO监听对象之后-类对象 -%@", object_getClass(self.person));
+NSLog(@"person添加KVO监听之后-方法实现 -%p", [self.person methodForSelector:@selector(setAge:)]);
+NSLog(@"person添加KVO监听之后-元类对象 -%@", object_getClass(object_getClass(self.person)));
 
 //打印结果
-KVO-test[1214:513029] person1添加KVO监听对象之前-类对象 -Person
-KVO-test[1214:513029] person1添加KVO监听之前-方法实现 -0x100411470
-KVO-test[1214:513029] person1添加KVO监听之前-元类对象 -Person
+person添加KVO监听对象之前-类对象 -Person
+person添加KVO监听之前-方法实现 -0x10ac1b850
+person添加KVO监听之前-元类对象 -Person
 
-KVO-test[1214:513029] person1添加KVO监听对象之后-类对象 -NSKVONotifying_Person
-KVO-test[1214:513029] person1添加KVO监听之后-方法实现 -0x10076c844
-KVO-test[1214:513029] person1添加KVO监听之后-元类对象 -NSKVONotifying_Person
+person添加KVO监听对象之后-类对象 -NSKVONotifying_Person
+person添加KVO监听之后-方法实现 -0x10af7c844
+person添加KVO监听之后-元类对象 -NSKVONotifying_Person
 
 //通过地址查找方法
 (lldb) p (IMP)0x10f24b470
-(IMP) $0 = 0x000000010f24b470 (KVO-test`-[Person setAge:] at Person.h:15)
+(IMP) $0 = 0x000000010f24b470 ([Person setAge:] at Person.h:15)
 (lldb) p (IMP)0x10f5a6844
 (IMP) $1 = 0x000000010f5a6844 (Foundation`_NSSetLongLongValueAndNotify)
 ```
@@ -563,7 +573,7 @@ KVO-test[1214:513029] person1添加KVO监听之后-元类对象 -NSKVONotifying_
 //通过地址查找方法
 //添加KVO之前
 (lldb) p (IMP)0x10f24b470
-(IMP) $0 = 0x000000010f24b470 (KVO-test`-[Person setAge:] at Person.h:15)
+(IMP) $0 = 0x000000010f24b470 ([Person setAge:] at Person.h:15)
 //添加KVO之后
 (lldb) p (IMP)0x10f5a6844
 (IMP) $1 = 0x000000010f5a6844 (Foundation`_NSSetLongLongValueAndNotify)
@@ -593,13 +603,13 @@ KVO-test[1214:513029] person1添加KVO监听之后-元类对象 -NSKVONotifying_
 @end
 
 //打印结果
-KVO-test[1457:637227] willChangeValueForKey
-KVO-test[1457:637227] setAge:
-KVO-test[1457:637227] didChangeValueForKey - begin
-KVO-test[1457:637227] didChangeValueForKey - end
-KVO-test[1457:637227] willChangeValueForKey
-KVO-test[1457:637227] didChangeValueForKey - begin
-KVO-test[1457:637227] didChangeValueForKey - end
+ willChangeValueForKey
+ setAge:
+ didChangeValueForKey - begin
+ didChangeValueForKey - end
+ willChangeValueForKey
+ didChangeValueForKey - begin
+ didChangeValueForKey - end
 ```
 * 通过打印结果，我们可以清晰看到
 > 1、首先调用`willChangeValueForKey:`方法。</br>
